@@ -1,6 +1,7 @@
 # NEXUS
 
 > **N**eural network for **EX**ploring the **U**nified **S**tructure–functional connectome 
+
 > Time-series dynamic graph learning for brain connectivity analysis.
 
 ---
