@@ -1,6 +1,6 @@
 # NEXUS
 
-> **N**eural **E**volution e**X**plorer with **U**nderlying **S**tructure  
+> **N**eural network for **EX**ploring the **U**nified **S**tructure–functional connectome 
 > Time-series dynamic graph learning for brain connectivity analysis.
 
 ---
@@ -11,12 +11,6 @@
 NEXUS/
 ├── SC-RNN.py                 # Main training script
 ├── analyse_notebook/         # Analysis & visualization notebooks
-├── result/                   # Outputs
-│   ├── w_layer/              # With structural constraint （with cortical layers）
-│   │   ├── stage{1,2,3}/
-│   │   │   ├── dynamic_full_graphs.npy  # [T, N, N]
-│   │   │   └── epoch_avg_graphs.npy     # [E, N, N]
-│   └── wo_layer/             # With structural constraint （without cortical layers）
 ├── SC/                       # Structural connectivity matrices
 │   ├── SEU_net_w_corticalLayers.xlsx
 |   └── SEU_net_wo_corticalLayers.xlsx
