@@ -49,7 +49,7 @@ ego <- enrichGO(
 )
 
 ## ======================
-## 4. Top terms + 星号（关键位置）
+## 4. Top terms 
 ## ======================
 
 go_show <- ego@result %>%
@@ -75,7 +75,7 @@ go_clean <- go_show %>%
   rename(Genes = geneID)
 
 ## ======================
-## 6. 小梯度 logFC（你原始做法）
+## 6. logFC
 ## ======================
 
 set.seed(123)
@@ -96,7 +96,7 @@ df_chord$logFC <- go_clean$logFC[
 ]
 
 ## ======================
-## 8. Colors（完全按你的方式）
+## 8. Colors
 ## ======================
 
 term_colors <- brewer.pal(
