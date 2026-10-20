@@ -37,7 +37,7 @@ pip install -r requirements.txt
 | File | Format | Description |
 |------|--------|-------------|
 | `--sc_file` | CSV | Structural connectivity matrix `[N, N]` |
-| `--fc_file` | PKL/NPY | Functional connectivity time-series `[T, N, N]` or `[T, N]` |
+| `--fc_file` | PKL/NPY | Functional connectivity time-series `[N, T]`  |
 
 > Place data in `SC/` or specify paths via arguments.
 
