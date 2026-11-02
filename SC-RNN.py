@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Time Series Dynamic Graph Learning Model - Command Line Version
+Supports custom file paths and hyperparameters
 """
 
 import argparse
@@ -19,6 +20,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
 from tqdm import tqdm
+from sklearn.preprocessing import MinMaxScaler
 
 
 # ==================== Utility Functions ====================
@@ -35,7 +37,7 @@ def set_seed(seed=42):
 # ==================== Model Definitions ====================
 class SimpleGraphLearn(nn.Module):
     """Graph learning module"""
-    def __init__(self, node_dim, nodes, dropout=0.5, struct_connectome=None, is_undirected=True):
+    def __init__(self, node_dim, nodes, dropout=0.5, struct_connectome=None, is_undirected=False):
         super(SimpleGraphLearn, self).__init__()
         self.nodes = nodes
         self.dropout = dropout
@@ -104,7 +106,7 @@ class TimeSeriesDynamicGraphModel(nn.Module):
     """Time series dynamic graph learning model"""
     def __init__(self, device, num_nodes, seq_length=12, in_dim=1, out_dim=1, 
                  hidden_dim=32, dropout=0.3, embed_dim=10, heads=4, head_dim=8, 
-                 struct_connectome=None, is_undirected=True):
+                 struct_connectome=None, is_undirected=False):
         super(TimeSeriesDynamicGraphModel, self).__init__()
         self.device = device
         self.num_nodes = num_nodes
@@ -185,7 +187,7 @@ class TimeSeriesDynamicGraphModel(nn.Module):
             
             current_h = h_t
             for gcn_layer in self.gcn_layers:
-                h_gcn = torch.matmul(adj_t, current_h)
+                h_gcn = torch.matmul(adj_t.transpose(-1,-2), current_h)
                 h_gcn = gcn_layer(h_gcn)
                 h_gcn = F.relu(h_gcn)
                 h_gcn = F.dropout(h_gcn, self.dropout, training=self.training)
@@ -205,7 +207,7 @@ class Trainer:
     """Trainer class"""
     def __init__(self, num_nodes, seq_length, in_dim, out_dim, hidden_dim, dropout, lrate, wdecay, device, 
                  embed_dim, heads=4, head_dim=8, struct_connectome=None, struct_constraint_weight=0.2,
-                 is_undirected=True):
+                 is_undirected=False):
         
         self.model = TimeSeriesDynamicGraphModel(
             device, num_nodes, seq_length, in_dim, out_dim,
@@ -224,9 +226,6 @@ class Trainer:
             'eps': 0.00001,
             'cooldown': 20
         }
-        # Check if verbose parameter is supported
-        if 'verbose' in inspect.signature(lr_scheduler.ReduceLROnPlateau.__init__).parameters:
-            scheduler_kwargs['verbose'] = True
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, **scheduler_kwargs)
         
         self.loss = nn.MSELoss()
@@ -280,7 +279,7 @@ def train_timeseries_dynamic_graph(
     hidden_dim, lr, epochs, batch_size, dropout,
     device=None, seed=42, val_ratio=0.2, patience=20,
     heads=4, head_dim=8, embed_dim=10, struct_constraint_weight=0.5,
-    save_dir="./results/wo_layer/stage1", is_undirected=True
+    save_dir="./results/wo_layer/stage1", is_undirected=False
 ):
     """Train time series dynamic graph model"""
     
@@ -294,6 +293,13 @@ def train_timeseries_dynamic_graph(
     if seq_length is None:
         seq_length = total_time - pred_length
 
+    if not np.isfinite(cell_trace).all():
+        raise ValueError("Activity data contains NaN or infinite values")
+    if struct_connectome is not None and not np.isfinite(struct_connectome).all():
+        raise ValueError("Structural connectivity contains NaN or infinite values")
+    if epochs < 1:
+        raise ValueError("epochs must be at least 1")
+
     # Data preprocessing
     data, targets = [], []
     cell_trace = (cell_trace - np.mean(cell_trace)) / (np.std(cell_trace) + 1e-8)
@@ -306,6 +312,9 @@ def train_timeseries_dynamic_graph(
 
     data, targets = np.array(data), np.array(targets)
     split = int(len(data) * (1 - val_ratio))
+
+    if split < 1 or split >= len(data):
+        raise ValueError("Time series and validation ratio must provide nonempty training and validation sets")
 
     train_data = torch.FloatTensor(data[:split]).to(device)
     train_targets = torch.FloatTensor(targets[:split]).to(device)
@@ -321,6 +330,7 @@ def train_timeseries_dynamic_graph(
         is_undirected=is_undirected
     )
 
+    saved_this_run = False
     best_val = float('inf')
     patience_count = 0
     train_losses, val_losses = [], []
@@ -344,6 +354,8 @@ def train_timeseries_dynamic_graph(
             for i in range(0, len(val_data), batch_size):
                 val_loss += engine.eval(val_data[i:i+batch_size], val_targets[i:i+batch_size])[0]
         val_loss /= (len(val_data)//batch_size + 1)
+        if not np.isfinite(train_loss) or not np.isfinite(val_loss):
+            raise RuntimeError(f"Non-finite loss at epoch {epoch + 1}: train={train_loss}, val={val_loss}")
         val_losses.append(val_loss)
         engine.scheduler.step(val_loss)
 
@@ -352,6 +364,7 @@ def train_timeseries_dynamic_graph(
             best_val = val_loss
             patience_count = 0
             torch.save(engine.model.state_dict(), f"{save_dir}/best_model.pth")
+            saved_this_run = True
         else:
             patience_count += 1
         if patience_count >= patience:
@@ -368,7 +381,9 @@ def train_timeseries_dynamic_graph(
             print(f"Epoch {epoch+1}/{epochs} | Train {train_loss:.5f} | Val {val_loss:.5f}")
 
     print("Training completed, loading best model")
-    engine.model.load_state_dict(torch.load(f"{save_dir}/best_model.pth"))
+    if not saved_this_run:
+        raise RuntimeError("No best model was saved during this training run")
+    engine.model.load_state_dict(torch.load(f"{save_dir}/best_model.pth", map_location=device, weights_only=True))
     engine.model.eval()
 
     np.save(f"{save_dir}/train_losses.npy", np.array(train_losses))
@@ -406,6 +421,22 @@ def train_timeseries_dynamic_graph(
 
 
 # ==================== Visualization Functions ====================
+def load_plot_sc(save_dir, sc_file, num_regions):
+    """Use the aligned, normalized training SC and its matching labels."""
+    aligned_path = os.path.join(save_dir, "aligned_sc.csv")
+    if os.path.exists(aligned_path):
+        sc = pd.read_csv(aligned_path, index_col=0)
+        values = sc.to_numpy()
+    elif sc_file and os.path.exists(sc_file):
+        sc = pd.read_csv(sc_file, index_col=0)
+        values = MinMaxScaler().fit_transform(sc)
+    else:
+        return None, None
+    if values.shape != (num_regions, num_regions):
+        raise ValueError("SC and learned graph dimensions differ; regenerate plots with matching --fc_file and slice arguments")
+    return values, sc.index.tolist()
+
+
 def plot_dynamic_graph_results(save_dir, struct_connectome_array=None, struct_connectome_file=None):
     """Plot dynamic graph analysis results"""
     
@@ -419,22 +450,10 @@ def plot_dynamic_graph_results(save_dir, struct_connectome_array=None, struct_co
     dyn = np.load(dyn_path)
     T, N, _ = dyn.shape
 
-    struct = struct_connectome_array
-    labels = None
-    
-    # Load labels from structural connectome file if provided
-    if struct_connectome_file and os.path.exists(struct_connectome_file):
-        SC = pd.read_csv(struct_connectome_file, index_col=0)
-        SC.index.name = None
-        labels = SC.index.tolist()
-        # If struct_connectome_array is not provided, load from file
-        if struct is None:
-            struct = SC.values
-            struct_min = struct.min()
-            struct_max = struct.max()
-            if struct_max > struct_min:
-                struct = (struct - struct_min) / (struct_max - struct_min)
-    
+    struct, labels = load_plot_sc(save_dir, struct_connectome_file, N)
+    if struct_connectome_array is not None:
+        struct = struct_connectome_array
+
     epoch_graphs = np.load(epoch_graphs_path) if os.path.exists(epoch_graphs_path) else None
 
     # Calculate metrics
@@ -467,7 +486,7 @@ def plot_dynamic_graph_results(save_dir, struct_connectome_array=None, struct_co
     axs[0,2].set_xlabel("Time")
     axs[0,2].legend()
 
-    im1 = axs[1,0].imshow(avg_graph, cmap="bwr", vmin=-1, vmax=1)
+    im1 = axs[1,0].imshow(avg_graph, cmap="seismic", vmin=-1, vmax=1)
     axs[1,0].set_title("Average Learned Dynamic Graph")
     plt.colorbar(im1, ax=axs[1,0], shrink=0.6)
     
@@ -479,7 +498,7 @@ def plot_dynamic_graph_results(save_dir, struct_connectome_array=None, struct_co
         axs[1,0].set_yticklabels(labels, fontsize=4)
 
     if struct is not None:
-        im2 = axs[1,1].imshow(struct, cmap="gray")
+        im2 = axs[1,1].imshow(struct, cmap="Reds", vmin=0, vmax=1)
         axs[1,1].set_title("Structural Connectome")
         plt.colorbar(im2, ax=axs[1,1], shrink=0.6)
         
@@ -519,22 +538,13 @@ def plot_dynamic_graph_single(save_dir, struct_connectome_file=None):
     dyn = np.load(dyn_path)
     T, N, _ = dyn.shape
 
-    struct = None
-    labels = None
-    if struct_connectome_file and os.path.exists(struct_connectome_file):
-        SC = pd.read_csv(struct_connectome_file, index_col=0)
-        SC.index.name = None
-        struct = SC.values
-        struct_min = struct.min()
-        struct_max = struct.max()
-        struct = (struct - struct_min) / (struct_max - struct_min)
-        labels = SC.index.tolist()
+    struct, labels = load_plot_sc(save_dir, struct_connectome_file, N)
 
     avg_graph = np.mean(dyn, axis=0)
 
     fig, axs = plt.subplots(1, 2, figsize=(14,7))
 
-    im1 = axs[0].imshow(avg_graph, cmap="bwr", vmin=-1, vmax=1)
+    im1 = axs[0].imshow(avg_graph, cmap="seismic", vmin=-1, vmax=1)
     axs[0].set_title("Structure-constrained functional connectome", fontsize=16)
     plt.colorbar(im1, ax=axs[0], shrink=0.6)
 
@@ -545,12 +555,12 @@ def plot_dynamic_graph_single(save_dir, struct_connectome_file=None):
         axs[0].set_yticklabels(labels, fontsize=4)
 
     if struct is not None:
-        cmap = plt.cm.get_cmap('bwr')
+        cmap = plt.cm.get_cmap('seismic')
         new_cmap = mcolors.LinearSegmentedColormap.from_list(
             'white_red',
             cmap(np.linspace(0.5, 1, 256))
         )
-        im2 = axs[1].imshow(struct, cmap=new_cmap, vmin=0)
+        im2 = axs[1].imshow(struct, cmap=new_cmap, vmin=0, vmax=1)
         axs[1].set_title("Structural Connectome", fontsize=16)
         plt.colorbar(im2, ax=axs[1], shrink=0.6)
 
@@ -677,7 +687,7 @@ def parse_slice(slice_str):
         raise ValueError(f"Invalid slice format: {slice_str}, please use 'start:end' or 'start:end:step' format")
 
 
-def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_undirected=True):
+def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_undirected=False, save_dir=None):
     """
     Load structural connectivity matrix and functional connectivity data
     
@@ -686,7 +696,7 @@ def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_und
         fc_file: Path to functional connectivity data file
         fc_time_slice: Time dimension slice for functional connectivity data, format: 'start:end' or 'start:end:step'
         fc_region_slice: Region dimension slice for functional connectivity data, format: 'start:end' or 'start:end:step'
-        is_undirected: Boolean indicating if graph is undirected (symmetric). Default is True.
+        is_undirected: Boolean indicating if graph is undirected (symmetric). Default is False.
     
     Returns:
         SC_rescaled_array: Structural connectivity matrix (numpy array)
@@ -695,14 +705,11 @@ def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_und
     # Load structural connectivity matrix
     if sc_file and os.path.exists(sc_file):
         SC = pd.read_csv(sc_file, index_col=0)
-        SC_rescaled = (SC - SC.min()) / (SC.max() - SC.min())
-        SC_rescaled_array = SC_rescaled.values
-        
-        # If region slice is applied, also slice the structural connectivity matrix accordingly
-        if fc_region_slice is not None:
-            region_slice = parse_slice(fc_region_slice)
-            SC_rescaled_array = SC_rescaled_array[region_slice, :]
-            SC_rescaled_array = SC_rescaled_array[:, region_slice]
+        if not np.isfinite(SC.to_numpy(dtype=float)).all():
+            raise ValueError("SC contains NaN or infinite values")
+        # Align and slice raw SC before normalization.
+        SC_rescaled_array = SC.to_numpy(dtype=float)
+        sc_labels = SC.index.tolist()
         
         graph_type = "undirected" if is_undirected else "directed"
         print(f"Loaded structural connectivity matrix: {sc_file}, shape={SC_rescaled_array.shape}, type={graph_type}")
@@ -710,7 +717,7 @@ def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_und
         SC_rescaled_array = None
         graph_type = "undirected" if is_undirected else "directed"
         print("Warning: Structural connectivity matrix file not provided, structural constraints will not be used")
-        print(f"Using {graph_type} graph (default: undirected)")
+        print(f"Using {graph_type} graph (default: directed)")
     
     # Load functional connectivity data
     if fc_file and os.path.exists(fc_file):
@@ -722,6 +729,36 @@ def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_und
         else:
             raise ValueError(f"Unsupported file format: {fc_file}, please use .pkl or .npy format")
         
+        # Regional trace dictionaries must follow the same region order as SC.
+        if isinstance(FC_array, dict):
+            traces = FC_array.get('binned_traces')
+            if not isinstance(traces, dict) or not traces:
+                raise ValueError("PKL dictionary must contain a nonempty 'binned_traces' region dictionary")
+            if SC_rescaled_array is not None:
+                if list(SC.index) != list(SC.columns):
+                    raise ValueError("SC row and column region labels must match in the same order")
+                regions = [region for region in SC.index if region in traces]
+                if not regions:
+                    raise ValueError("No common region labels between SC and binned_traces")
+                missing = [region for region in SC.index if region not in traces]
+                extra = [region for region in traces if region not in SC.index]
+                if missing:
+                    print(f"Excluding SC regions without activity: {missing}")
+                if extra:
+                    print(f"Excluding activity regions without SC: {extra}")
+                sc_labels = regions
+                indices = SC.index.get_indexer(regions)
+                SC_rescaled_array = SC_rescaled_array[np.ix_(indices, indices)]
+            else:
+                regions = list(traces)
+            values = [np.asarray(traces[region]) for region in regions]
+            if any(value.ndim != 1 for value in values):
+                raise ValueError("Each binned_traces entry must be a one-dimensional time series")
+            if len({len(value) for value in values}) != 1:
+                raise ValueError("All regional time series must have the same length")
+            FC_array = np.stack(values, axis=0)
+            print(f"Converted binned_traces to array in region order: {len(regions)} regions")
+
         original_shape = FC_array.shape
         print(f"Loaded functional connectivity data: {fc_file}, original shape={original_shape}")
         
@@ -741,6 +778,21 @@ def load_data(sc_file, fc_file, fc_time_slice=None, fc_region_slice=None, is_und
     else:
         raise FileNotFoundError(f"Functional connectivity data file does not exist: {fc_file}")
     
+    if SC_rescaled_array is not None:
+        if fc_region_slice:
+            region_slice = parse_slice(fc_region_slice)
+            SC_rescaled_array = SC_rescaled_array[region_slice, :][:, region_slice]
+            sc_labels = sc_labels[region_slice]
+        if FC_array.ndim == 2 and SC_rescaled_array.shape != (FC_array.shape[0], FC_array.shape[0]):
+            raise ValueError(f"SC shape {SC_rescaled_array.shape} does not match activity region count {FC_array.shape[0]}")
+        # Match the original notebook: scale each column after region alignment.
+        SC_rescaled_array = MinMaxScaler().fit_transform(SC_rescaled_array)
+        print(f"Final aligned SC shape={SC_rescaled_array.shape}")
+        if save_dir is not None:
+            os.makedirs(save_dir, exist_ok=True)
+            pd.DataFrame(SC_rescaled_array, index=sc_labels, columns=sc_labels).to_csv(
+                os.path.join(save_dir, "aligned_sc.csv"))
+
     return SC_rescaled_array, FC_array
 
 
@@ -752,9 +804,9 @@ def main():
     )
     
     # File path parameters
-    parser.add_argument('--sc_file', type=str, default='structural_connectivity.csv',
+    parser.add_argument('--sc_file', type=str, default='DK68_structural_connectivity.csv',
                         help='Path to structural connectivity matrix file (CSV format)')
-    parser.add_argument('--fc_file', type=str, default='traces.pkl',
+    parser.add_argument('--fc_file', type=str, default='N3_eeg_normalized.pkl',
                         help='Path to functional connectivity data file (PKL or NPY format)')
     parser.add_argument('--save_dir', type=str, default='./results/default',
                         help='Directory to save results')
@@ -774,7 +826,7 @@ def main():
                         help='Hidden layer dimension')
     parser.add_argument('--embed_dim', type=int, default=10,
                         help='Node embedding dimension')
-    parser.add_argument('--dropout', type=float, default=0.5,
+    parser.add_argument('--dropout', type=float, default=0.1,
                         help='Dropout rate')
     parser.add_argument('--heads', type=int, default=4,
                         help='Number of attention heads')
@@ -792,12 +844,16 @@ def main():
                         help='Validation set ratio')
     parser.add_argument('--patience', type=int, default=20,
                         help='Early stopping patience')
-    parser.add_argument('--struct_constraint_weight', type=float, default=0.5,
+    parser.add_argument('--struct_constraint_weight', type=float, default=1,
                         help='Structural constraint weight')
     
     # Graph type parameter
-    parser.add_argument('--directed', action='store_true',
-                        help='Use directed graph (asymmetric adjacency matrix). If not specified, defaults to undirected graph (symmetric adjacency matrix)')
+    graph_group = parser.add_mutually_exclusive_group()
+    graph_group.add_argument('--undirected', action='store_true',
+                             help='Enable adjacency symmetrization before SC clipping; default is directed')
+    graph_group.add_argument('--directed', dest='undirected', action='store_false',
+                             help='Use directed graph (default; accepted for compatibility)')
+    parser.set_defaults(undirected=False)
     
     # Other parameters
     parser.add_argument('--seed', type=int, default=42,
@@ -850,6 +906,9 @@ def main():
         if not os.path.exists(args.save_dir):
             raise FileNotFoundError(f"Save directory does not exist: {args.save_dir}")
         
+        load_data(args.sc_file, args.fc_file, args.fc_time_slice,
+                  args.fc_region_slice, is_undirected=args.undirected,
+                  save_dir=args.save_dir)
         print("Generating visualization plots only...")
         plot_dynamic_graph_results(args.save_dir, struct_connectome_array=None, struct_connectome_file=args.sc_file)
         plot_dynamic_graph_single(args.save_dir, args.sc_file)
@@ -859,15 +918,15 @@ def main():
     
     # Load data
     print("Loading data...")
-    # Determine graph type: if --directed is specified, use directed graph (is_undirected=False)
-    # Otherwise, default to undirected graph (is_undirected=True)
-    is_undirected = not args.directed
+    # Directed by default; symmetrize only when --undirected is specified.
+    is_undirected = args.undirected
     struct_connectome, cell_trace = load_data(
         args.sc_file, 
         args.fc_file,
         fc_time_slice=args.fc_time_slice,
         fc_region_slice=args.fc_region_slice,
-        is_undirected=is_undirected
+        is_undirected=is_undirected,
+        save_dir=args.save_dir
     )
     
     # Train model

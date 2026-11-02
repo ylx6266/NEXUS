@@ -1,10 +1,15 @@
-# NEXUS
+# Learning Single-Cell Connectomes by Bridging Anatomy and Dynamics
 
-> **N**eural network for **EX**ploring the **U**nified **S**tructure–functional connectome 
+>  **NEXUS** (**N**etwork **E**stimation e**X**ploiting a **U**nified **S**tructure)
 
-> Time-series dynamic graph learning for brain connectivity analysis.
+> a structural constraint framework designed to reconstruct high-resolution functional connectomes from neural activity recorded at the single-cell resolution within a shared and targeted anatomical scaffold also derived from single-resolution neuronal connectivity.
 
 ---
+
+
+
+
+
 
 ## 📦 Structure
 
@@ -12,9 +17,9 @@
 NEXUS/
 ├── SC-RNN.py                 # Main training script
 ├── analyse_notebook/         # Analysis & visualization notebooks
-├── SC/                       # Structural connectivity matrices
-│   ├── SEU_net_w_corticalLayers.xlsx
-|   └── SEU_net_wo_corticalLayers.xlsx
+├── example/                       # examples
+│   ├── SC.csv
+|   └── trace.pkl
 ├── requirements.txt
 └── README.md
 ```
@@ -46,8 +51,7 @@ pip install -r requirements.txt
 ## 🚀 Usage
 
 ```bash
-# Default run
-python SC-RNN.py
+python SC-RNN.py --sc_file example/SC.csv --fc_file trace.pkl 
 
 # Custom experiment
 python SC-RNN.py \
@@ -57,21 +61,21 @@ python SC-RNN.py \
   --seq_length 100 --pred_length 20 \
   --hidden_dim 64 --embed_dim 16 \
   --struct_constraint_weight 0.8 \
-  --directed --seed 2024 --plot
+  --directed --seed 42 --plot
 
 # Visualize only (no training)
-python SC-RNN.py --save_dir results/w_layer/stage3 --plot_only
+python SC-RNN.py --save_dir results/default --plot_only
 ```
 
 ### Key Arguments
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--sc_file` | `structural_connectivity.csv` | SC matrix path |
+| `--sc_file` | `SC.csv` | SC matrix path |
 | `--fc_file` | `traces.pkl` | FC data path |
 | `--save_dir` | `./results/default` | Output directory |
 | `--seq_length` / `--pred_length` | `50` / `10` | Input/prediction horizon |
-| `--struct_constraint_weight` | `0.5` | Constraint strength (0.0 = off) |
+| `--struct_constraint_weight` | `0.7` | Constraint strength (0.0 = off) |
 | `--directed` | `False` | Use asymmetric adjacency |
 | `--plot` / `--plot_only` | `False` | Generate/only generate plots |
 
@@ -95,9 +99,7 @@ Use `analyse_notebook/*.ipynb` to load `.npy` files and generate publication-rea
 
 ---
 
-## 🔬 Reproducibility
+## 🔬 Tips
 
-- Fix random seed: `--seed <int>`
-- Save config: auto-generated `config.yaml` in `--save_dir`
-- Lock environment: use provided `requirements.txt`
+> For reconstructing functional connectomes from a specific dataset, we strongly recommend performing a systematic hyperparameter search, as demonstrated in our manuscript. The configuration achieving the lowest validation loss among the tested combinations can be selected for subsequent FC reconstruction. Users are also encouraged to examine convergence behavior and assess the stability of reconstructed networks across different random seeds.
 
