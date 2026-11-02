@@ -6,12 +6,23 @@
 
 ---
 
+## Data Availability
+
+The datasets and reconstructed functional connectomes used in this study are available from the following sources:
+
+- **Neuropixels recordings:** The International Brain Laboratory (IBL) Brain-Wide Map dataset is publicly available through the [IBL data portal](https://www.internationalbrainlab.com).
+
+- **MERFISH data:** The MERFISH dataset is publicly available through the Allen Institute's [ABC Atlas data portal](https://alleninstitute.github.io/abc_atlas_access/descriptions/MERFISH-C57BL6J-638850.html).
+
+- **Processed datasets and NEXUS outputs:** The reconstructed functional connectivity matrices and processed Neuropixels datasets, including pre-aggregation spike data and time-normalized regional activity traces, are temporarily available through [Google Drive](https://drive.google.com/drive/folders/18jGqBYK-bTRpADzvFMqXyyHomkGdnBk5?usp=sharing) for peer review.
+
+- **Calcium-imaging data:** The calcium-imaging data and corresponding model outputs are available from the corresponding authors upon reasonable request.
+
+Permanent repository links for the publicly shared processed datasets and model outputs will be provided upon publication.
 
 
 
-
-
-## 📦 Structure
+## Structure
 
 ```
 NEXUS/
@@ -26,7 +37,7 @@ NEXUS/
 
 ---
 
-## ⚙️ Install
+## Install
 
 ```bash
 # Conda (recommended)
@@ -37,7 +48,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🗄️ Data
+## Data
 
 | File | Format | Description |
 |------|--------|-------------|
@@ -48,7 +59,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Usage
+## Usage
 
 ```bash
 python SC-RNN.py --sc_file example/SC.csv --fc_file trace.pkl 
@@ -83,7 +94,7 @@ python SC-RNN.py --save_dir results/default --plot_only
 
 ---
 
-## 📤 Outputs
+## Outputs
 
 ```
 results/exp/
@@ -99,7 +110,16 @@ Use `analyse_notebook/*.ipynb` to load `.npy` files and generate publication-rea
 
 ---
 
-## 🔬 Tips
+## Recommendations for Model Training and Selection
 
-> For reconstructing functional connectomes from a specific dataset, we strongly recommend performing a systematic hyperparameter search, as demonstrated in our manuscript. The configuration achieving the lowest validation loss among the tested combinations can be selected for subsequent FC reconstruction. Users are also encouraged to examine convergence behavior and assess the stability of reconstructed networks across different random seeds.
+NEXUS relies on stochastic optimization, and the reconstructed functional networks may vary with random initialization and computational environment. Consequently, identical reconstruction results are not always guaranteed across different random seeds, hardware platforms, or software configurations.
+
+For reliable application to new datasets, we strongly recommend evaluating multiple hyperparameter configurations rather than relying on a single training run. Following the procedure described in our manuscript, candidate configurations should be assessed using two complementary criteria:
+
+1. **Optimization convergence:** Evaluate the convergence of validation loss during training.
+2. **Network consistency:** Evaluate the similarity of the inferred functional connectome to those obtained from other hyperparameter configurations using signed weighted Jaccard similarity.
+
+We recommend selecting a representative configuration based on the combined rankings of these two criteria, independently of the downstream biological findings.
+
+Users should also record the random seed, software environment, and selected model configuration to facilitate reproducibility.
 
