@@ -856,8 +856,6 @@ def main():
     parser.set_defaults(undirected=False)
     
     # Other parameters
-    parser.add_argument('--seed', type=int, default=42,
-                        help='Random seed')
     parser.add_argument('--device', type=str, default=None,
                         help='Device (cuda/cpu), default auto-select')
     parser.add_argument('--plot', action='store_true',
@@ -942,7 +940,7 @@ def main():
         batch_size=args.batch_size,
         dropout=args.dropout,
         device=device,
-        seed=args.seed,
+        seed=42,
         val_ratio=args.val_ratio,
         patience=args.patience,
         heads=args.heads,

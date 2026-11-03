@@ -16,7 +16,7 @@ The datasets and reconstructed functional connectomes used in this study are ava
 
 - **Processed datasets and NEXUS outputs:** The reconstructed functional connectivity matrices and processed Neuropixels datasets, including pre-aggregation spike data and time-normalized regional activity traces, are temporarily available through [Google Drive](https://drive.google.com/drive/folders/18jGqBYK-bTRpADzvFMqXyyHomkGdnBk5?usp=sharing) for peer review.
 
-- **Calcium-imaging data:** The calcium-imaging data are available from the corresponding authors upon reasonable request.
+- **Calcium-imaging data:** The calcium-imaging data and corresponding model outputs are available from the corresponding authors upon reasonable request.
 
 Permanent repository links for the publicly shared processed datasets and model outputs will be provided upon publication.
 
@@ -72,7 +72,7 @@ python SC-RNN.py \
   --seq_length 100 --pred_length 20 \
   --hidden_dim 64 --embed_dim 16 \
   --struct_constraint_weight 0.8 \
-  --directed --seed 42 --plot
+  --directed --plot
 
 # Visualize only (no training)
 python SC-RNN.py --save_dir results/default --plot_only
@@ -86,7 +86,7 @@ python SC-RNN.py --save_dir results/default --plot_only
 | `--fc_file` | `traces.pkl` | FC data path |
 | `--save_dir` | `./results/default` | Output directory |
 | `--seq_length` / `--pred_length` | `50` / `10` | Input/prediction horizon |
-| `--struct_constraint_weight` | `0.5` | Constraint strength (0.0 = off) |
+| `--struct_constraint_weight` | `0.7` | Constraint strength (0.0 = off) |
 | `--directed` | `False` | Use asymmetric adjacency |
 | `--plot` / `--plot_only` | `False` | Generate/only generate plots |
 
