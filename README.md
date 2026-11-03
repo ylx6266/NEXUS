@@ -112,14 +112,13 @@ Use `analyse_notebook/*.ipynb` to load `.npy` files and generate publication-rea
 
 ## Recommendations for Model Training and Selection
 
-NEXUS relies on stochastic optimization, and the reconstructed functional networks may vary with random initialization and computational environment. Consequently, identical reconstruction results are not always guaranteed across different random seeds, hardware platforms, or software configurations.
+NEXUS employs a systematic hyperparameter selection strategy to obtain representative and well-converged functional connectomes. As neural activity characteristics and optimization conditions may differ across datasets and computational environments, model selection is performed separately for each analyzed dataset.
 
-For reliable application to new datasets, we strongly recommend evaluating multiple hyperparameter configurations rather than relying on a single training run. Following the procedure described in our manuscript, candidate configurations should be assessed using two complementary criteria:
+**Model training and selection.** For independent model training or application to new datasets, we recommend evaluating multiple hyperparameter configurations following the selection procedure described in the manuscript. Candidate configurations are assessed using two complementary criteria:
 
 1. **Optimization convergence:** Evaluate the convergence of validation loss during training.
 2. **Network consistency:** Evaluate the similarity of the inferred functional connectome to those obtained from other hyperparameter configurations using signed weighted Jaccard similarity.
 
-We recommend selecting a representative configuration based on the combined rankings of these two criteria, independently of the downstream biological findings.
+Configurations are ranked independently according to these two criteria, and the configuration with the lowest combined rank is selected for subsequent analyses. Model selection is performed independently of downstream biological findings.
 
-Users should also record the random seed, software environment, and selected model configuration to facilitate reproducibility.
 
