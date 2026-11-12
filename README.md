@@ -14,7 +14,7 @@ The datasets and reconstructed functional connectomes used in this study are ava
 
 - **MERFISH data:** The MERFISH dataset is publicly available through the Allen Institute's [ABC Atlas data portal](https://alleninstitute.github.io/abc_atlas_access/descriptions/MERFISH-C57BL6J-638850.html).
 
-- **Processed datasets and NEXUS outputs:** The reconstructed functional connectivity matrices and processed Neuropixels datasets, including pre-aggregation spike data and time-normalized regional activity traces, are temporarily available through [Google Drive](https://drive.google.com/drive/folders/18jGqBYK-bTRpADzvFMqXyyHomkGdnBk5?usp=sharin) for peer review.
+- **Processed datasets and NEXUS outputs:** The reconstructed functional connectivity matrices and processed Neuropixels datasets, including pre-aggregation spike data and time-normalized regional activity traces, are temporarily available through [Google Drive](https://drive.google.com/drive/folders/18jGqBYK-bTRpADzvFMqXyyHomkGdnBk5?usp=sharing) for peer review.
 
 - **Calcium-imaging data:** The calcium-imaging data and corresponding model outputs are available from the corresponding authors upon reasonable request.
 
